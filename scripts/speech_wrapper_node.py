@@ -15,9 +15,9 @@ SPEAKING_ATTENTION_POINT_PUBLISHER = "/head_speaking_target"
 
 class SpeechWrapperNode(object):
     def __init__(self, ctx, world):
-        rospy.loginfo("[speech_wrapper] Waiting for service /naoqi_driver/tts/say")
+        #rospy.loginfo("[speech_wrapper] Waiting for service /naoqi_driver/tts/say")
         rospy.wait_for_service("/naoqi_driver/tts/say")
-        rospy.loginfo("[speech_wrapper] Ready to use !")
+        #rospy.loginfo("[speech_wrapper] Ready to use !")
         self.world = ctx.worlds[world]
         self.ros_services_proxy = {"say": rospy.ServiceProxy('/naoqi_driver/tts/say', Say)}
         self.ros_services = {"speak": rospy.Service("speak", Speak, self.handle_speak),
