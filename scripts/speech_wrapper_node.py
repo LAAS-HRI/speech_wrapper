@@ -5,7 +5,7 @@ import time
 import rospy
 import underworlds
 from underworlds.types import Situation
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PointStamped
 from std_msgs.msg import String
 from nao_interaction_msgs.srv import Say
 from speech_wrapper.srv import Speak, SpeakTo
@@ -23,7 +23,8 @@ class SpeechWrapperNode(object):
         self.ros_services = {"speak": rospy.Service("speak", Speak, self.handle_speak),
                              "speakTo": rospy.Service("speakTo", SpeakTo, self.handle_speak_to)}
         self.ros_pub = {"speaking_attention_point": rospy.Publisher(SPEAKING_ATTENTION_POINT_PUBLISHER,
-                                                                    TargetWithPriority, queue_size=5)}
+                                                                    TargetWithPriority, queue_size=5),
+                        "vizu": rospy.Publisher("speech_wrapper_node/speaking_attention_point", PointStamped, queue_size=5)}
         self.log_pub = {"situation_log": rospy.Publisher("speech_wrapper/log", String, queue_size=5)}
         self.current_situations_map = {}
         self.attention_point = TargetWithPriority()
@@ -78,7 +79,7 @@ class SpeechWrapperNode(object):
         self.start_n2_situation(self.world.timeline, "speakingTo", "robot", req.human_frame_id)
         self.ros_services_proxy["say"](req.text)
         target_with_priority = TargetWithPriority()
-        target_with_priority.target = req.point_to_look
+        target_with_priority.target = req.look_at
         target_with_priority.priority = req.priority
         self.attention_point = target_with_priority
         self.end_n2_situation(self.world.timeline, "speakingTo", "robot", req.human_frame_id)
@@ -86,6 +87,7 @@ class SpeechWrapperNode(object):
 
     def publish_attention_point(self):
         self.ros_pub["speaking_attention_point"].publish(self.attention_point)
+        self.ros_pub["vizu"].publish(self.attention_point.target)
 
     def run(self):
         rate = rospy.Rate(30)
