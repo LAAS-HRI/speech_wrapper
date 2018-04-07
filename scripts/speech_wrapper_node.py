@@ -13,11 +13,10 @@ from head_manager.msg import TargetWithPriority
 
 SPEAKING_ATTENTION_POINT_PUBLISHER = "/head_speaking_target"
 
+
 class SpeechWrapperNode(object):
     def __init__(self, ctx, world):
-        #rospy.loginfo("[speech_wrapper] Waiting for service /naoqi_driver/tts/say")
         rospy.wait_for_service("/naoqi_driver/tts/say")
-        #rospy.loginfo("[speech_wrapper] Ready to use !")
         self.world = ctx.worlds[world]
         self.ros_services_proxy = {"say": rospy.ServiceProxy('/naoqi_driver/tts/say', Say)}
         self.ros_services = {"speak": rospy.Service("speak", Speak, self.handle_speak),
@@ -40,26 +39,6 @@ class SpeechWrapperNode(object):
         timeline.update(sit)
         return sit.id
 
-    def start_n1_situation(self, timeline, predicate, subject_name, isevent=False):
-        description = predicate + "(" + subject_name + ")"
-        sit = Situation(desc=description)
-        sit.starttime = time.time()
-        if isevent:
-            sit.endtime = sit.starttime
-        self.current_situations_map[description] = sit
-        self.log_pub["situation_log"].publish("START " + description)
-        timeline.update(sit)
-        return sit.id
-
-    def end_n1_situation(self, timeline, predicate, subject_name):
-        description = predicate + "(" + subject_name + ")"
-        sit = self.current_situations_map[description]
-        self.log_pub["situation_log"].publish("END " + description)
-        try:
-            timeline.end(sit)
-        except Exception as e:
-            rospy.logwarn("[speech_wrapper] Exception occurred : " + str(e))
-
     def end_n2_situation(self, timeline, predicate, subject_name, object_name):
         description = predicate + "(" + subject_name + "," + object_name + ")"
         sit = self.current_situations_map[description]
@@ -70,19 +49,19 @@ class SpeechWrapperNode(object):
             rospy.logwarn("[speech_wrapper] Exception occurred : " + str(e))
 
     def handle_speak(self, req):
-        self.start_n1_situation(self.world.timeline, "speaking", "robot")
+        self.start_n2_situation(self.world.timeline, "isSpeakingTo", "robot", "robot")
         self.ros_services_proxy["say"](req.text)
-        self.end_n1_situation(self.world.timeline, "speaking", "robot")
+        self.end_n2_situation(self.world.timeline, "isSpeakingTo", "robot", "robot")
         return True
 
     def handle_speak_to(self, req):
-        self.start_n2_situation(self.world.timeline, "speakingTo", "robot", req.human_frame_id)
-        self.ros_services_proxy["say"](req.text)
         target_with_priority = TargetWithPriority()
         target_with_priority.target = req.look_at
         target_with_priority.priority = req.priority
         self.attention_point = target_with_priority
-        self.end_n2_situation(self.world.timeline, "speakingTo", "robot", req.human_frame_id)
+        self.start_n2_situation(self.world.timeline, "isSpeakingTo", "robot", req.human_frame_id)
+        self.ros_services_proxy["say"](req.text)
+        self.end_n2_situation(self.world.timeline, "isSpeakingTo", "robot", req.human_frame_id)
         return True
 
     def publish_attention_point(self):
