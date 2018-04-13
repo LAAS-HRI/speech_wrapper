@@ -13,22 +13,24 @@ from head_manager.msg import TargetWithPriority
 
 SPEAKING_ATTENTION_POINT_PUBLISHER = "/head_speaking_target"
 
+SPEAK_ALONE_PRIORITY = 50
+
 
 class SpeechWrapperNode(object):
     def __init__(self, ctx, world):
         rospy.wait_for_service("/naoqi_driver/tts/say")
         self.world = ctx.worlds[world]
         self.ros_services_proxy = {"say": rospy.ServiceProxy('/naoqi_driver/tts/say', Say)}
-        self.ros_services = {"speak": rospy.Service("speak", Speak, self.handle_speak),
-                             "speakTo": rospy.Service("speakTo", SpeakTo, self.handle_speak_to)}
+        self.ros_services = {"speak": rospy.Service("speech_wrapper/speak", Speak, self.handle_speak),
+                             "speak_to": rospy.Service("speech_wrapper/speak_to", SpeakTo, self.handle_speak_to)}
         self.ros_pub = {"speaking_attention_point": rospy.Publisher(SPEAKING_ATTENTION_POINT_PUBLISHER,
                                                                     TargetWithPriority, queue_size=5),
-                        "vizu": rospy.Publisher("speech_wrapper_node/speaking_attention_point", PointStamped, queue_size=5)}
+                        "vizu": rospy.Publisher("speech_wrapper/speaking_attention_point", PointStamped, queue_size=5)}
         self.log_pub = {"situation_log": rospy.Publisher("speech_wrapper/log", String, queue_size=5)}
         self.current_situations_map = {}
         self.attention_point = TargetWithPriority()
 
-    def start_n2_situation(self, timeline, predicate, subject_name, object_name, isevent=False):
+    def start_predicate(self, timeline, predicate, subject_name, object_name, isevent=False):
         description = predicate + "(" + subject_name + "," + object_name + ")"
         sit = Situation(desc=description)
         sit.starttime = time.time()
@@ -39,7 +41,7 @@ class SpeechWrapperNode(object):
         timeline.update(sit)
         return sit.id
 
-    def end_n2_situation(self, timeline, predicate, subject_name, object_name):
+    def end_predicate(self, timeline, predicate, subject_name, object_name):
         description = predicate + "(" + subject_name + "," + object_name + ")"
         sit = self.current_situations_map[description]
         self.log_pub["situation_log"].publish("END " + description)
@@ -49,9 +51,17 @@ class SpeechWrapperNode(object):
             rospy.logwarn("[speech_wrapper] Exception occurred : " + str(e))
 
     def handle_speak(self, req):
-        self.start_n2_situation(self.world.timeline, "isSpeakingTo", "robot", "robot")
+        self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", "robot")
+        target_with_priority = TargetWithPriority()
+        target_with_priority.target.header.frame_id = "base_link"
+        target_with_priority.target.header.point = Point()
+        target_with_priority.target.header.point.x = 2.0
+        target_with_priority.target.header.point.y = 1.0
+        target_with_priority.target.header.point.z = 0.0
+        target_with_priority.priority = SPEAK_ALONE_PRIORITY
+        self.attention_point = target_with_priority
         self.ros_services_proxy["say"](req.text)
-        self.end_n2_situation(self.world.timeline, "isSpeakingTo", "robot", "robot")
+        self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", "robot")
         return True
 
     def handle_speak_to(self, req):
@@ -59,9 +69,9 @@ class SpeechWrapperNode(object):
         target_with_priority.target = req.look_at
         target_with_priority.priority = req.priority
         self.attention_point = target_with_priority
-        self.start_n2_situation(self.world.timeline, "isSpeakingTo", "robot", req.human_frame_id)
+        self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", req.look_at.header.frame_id)
         self.ros_services_proxy["say"](req.text)
-        self.end_n2_situation(self.world.timeline, "isSpeakingTo", "robot", req.human_frame_id)
+        self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", req.look_at.header.frame_id)
         return True
 
     def publish_attention_point(self):
