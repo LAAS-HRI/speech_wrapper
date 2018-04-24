@@ -26,32 +26,39 @@ class SpeechWrapperNode(object):
         self.ros_pub = {"speaking_attention_point": rospy.Publisher(SPEAKING_ATTENTION_POINT_PUBLISHER,
                                                                     TargetWithPriority, queue_size=5),
                         "vizu": rospy.Publisher("speech_wrapper/speaking_attention_point", PointStamped, queue_size=5)}
-        self.log_pub = {"situation_log": rospy.Publisher("speech_wrapper/log", String, queue_size=5)}
+        self.log_pub = {"isSpeakingTo": rospy.Publisher("predicates_log/speakingto", String, queue_size=5),
+                        "isSpeaking": rospy.Publisher("predicates_log/speaking", String, queue_size=5)}
         self.current_situations_map = {}
-        self.attention_point = TargetWithPriority()
+        self.attention_point = None
 
-    def start_predicate(self, timeline, predicate, subject_name, object_name, isevent=False):
-        description = predicate + "(" + subject_name + "," + object_name + ")"
+    def start_predicate(self, timeline, predicate, subject_name, object_name=None, isevent=False):
+        if object_name is None:
+            description = predicate + "(" + subject_name + ")"
+        else:
+            description = predicate + "(" + subject_name + "," + object_name + ")"
         sit = Situation(desc=description)
         sit.starttime = time.time()
         if isevent:
             sit.endtime = sit.starttime
         self.current_situations_map[description] = sit
-        self.log_pub["situation_log"].publish("START " + description)
+        self.log_pub[predicate].publish("START " + description)
         timeline.update(sit)
         return sit.id
 
-    def end_predicate(self, timeline, predicate, subject_name, object_name):
-        description = predicate + "(" + subject_name + "," + object_name + ")"
-        sit = self.current_situations_map[description]
-        self.log_pub["situation_log"].publish("END " + description)
+    def end_predicate(self, timeline, predicate, subject_name, object_name=None):
+        if object_name is None:
+            description = predicate + "(" + subject_name + ")"
+        else:
+            description = predicate + "(" + subject_name + "," + object_name + ")"
         try:
+            sit = self.current_situations_map[description]
+            self.log_pub[predicate].publish("END " + description)
             timeline.end(sit)
         except Exception as e:
             rospy.logwarn("[speech_wrapper] Exception occurred : " + str(e))
 
     def handle_speak(self, req):
-        self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", "robot")
+        self.start_predicate(self.world.timeline, "isSpeaking", "robot")
         target_with_priority = TargetWithPriority()
         target_with_priority.target.header.frame_id = "base_link"
         target_with_priority.target.header.point = Point()
@@ -61,7 +68,7 @@ class SpeechWrapperNode(object):
         target_with_priority.priority = SPEAK_ALONE_PRIORITY
         self.attention_point = target_with_priority
         self.ros_services_proxy["say"](req.text)
-        self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", "robot")
+        self.end_predicate(self.world.timeline, "isSpeaking", "robot")
         return True
 
     def handle_speak_to(self, req):
@@ -69,9 +76,11 @@ class SpeechWrapperNode(object):
         target_with_priority.target = req.look_at
         target_with_priority.priority = req.priority
         self.attention_point = target_with_priority
-        self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", req.look_at.header.frame_id)
+        self.start_predicate(self.world.timeline, "isSpeaking", "robot")
+        self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
         self.ros_services_proxy["say"](req.text)
-        self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", req.look_at.header.frame_id)
+        self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
+        self.end_predicate(self.world.timeline, "isSpeaking", "robot")
         return True
 
     def publish_attention_point(self):
@@ -81,7 +90,8 @@ class SpeechWrapperNode(object):
     def run(self):
         rate = rospy.Rate(30)
         while not rospy.is_shutdown():
-            self.publish_attention_point()
+            if self.attention_point:
+                self.publish_attention_point()
             rate.sleep()
 
 if __name__ == "__main__":
