@@ -7,7 +7,7 @@ import underworlds
 from underworlds.types import Situation
 from geometry_msgs.msg import Point, PointStamped
 from std_msgs.msg import String
-from nao_interaction_msgs.srv import Say
+from naoqi import ALProxy
 from speech_wrapper.srv import Speak, SpeakTo
 from head_manager.msg import TargetWithPriority
 
@@ -15,12 +15,18 @@ SPEAKING_ATTENTION_POINT_PUBLISHER = "/head_speaking_target"
 
 SPEAK_ALONE_PRIORITY = 50
 
+IP = "mummer-eth0.laas.fr"
+VOICE_SPEED = 80
+
 
 class SpeechWrapperNode(object):
     def __init__(self, ctx, world):
-        rospy.wait_for_service("/naoqi_driver/tts/say")
+
+        self.tts = ALProxy("ALTextToSpeech", IP, 9559)
+        self.tts.setParameter("speed", VOICE_SPEED)
+
         self.world = ctx.worlds[world]
-        self.ros_services_proxy = {"say": rospy.ServiceProxy('/naoqi_driver/tts/say', Say)}
+
         self.ros_services = {"speak": rospy.Service("speech_wrapper/speak", Speak, self.handle_speak),
                              "speak_to": rospy.Service("speech_wrapper/speak_to", SpeakTo, self.handle_speak_to)}
         self.ros_pub = {"speaking_attention_point": rospy.Publisher(SPEAKING_ATTENTION_POINT_PUBLISHER,
@@ -67,7 +73,7 @@ class SpeechWrapperNode(object):
         target_with_priority.target.header.point.z = 0.0
         target_with_priority.priority = SPEAK_ALONE_PRIORITY
         self.attention_point = target_with_priority
-        self.ros_services_proxy["say"](req.text)
+        self.tts.say(req.text)
         self.end_predicate(self.world.timeline, "isSpeaking", "robot")
         return True
 
@@ -78,7 +84,7 @@ class SpeechWrapperNode(object):
         self.attention_point = target_with_priority
         self.start_predicate(self.world.timeline, "isSpeaking", "robot")
         self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
-        self.ros_services_proxy["say"](req.text)
+        self.tts.say(req.text)
         self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
         self.end_predicate(self.world.timeline, "isSpeaking", "robot")
         return True
