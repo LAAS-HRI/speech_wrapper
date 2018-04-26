@@ -15,14 +15,13 @@ SPEAKING_ATTENTION_POINT_PUBLISHER = "/head_speaking_target"
 
 SPEAK_ALONE_PRIORITY = 50
 
-IP = "mummer-eth0.laas.fr"
 VOICE_SPEED = 80
 
 
 class SpeechWrapperNode(object):
-    def __init__(self, ctx, world):
+    def __init__(self, ctx, world, nao_ip, nao_port):
 
-        self.tts = ALProxy("ALTextToSpeech", IP, 9559)
+        self.tts = ALProxy("ALTextToSpeech", nao_ip, nao_port)
         self.tts.setParameter("speed", VOICE_SPEED)
 
         self.world = ctx.worlds[world]
@@ -31,7 +30,8 @@ class SpeechWrapperNode(object):
                              "speak_to": rospy.Service("speech_wrapper/speak_to", SpeakTo, self.handle_speak_to)}
         self.ros_pub = {"speaking_attention_point": rospy.Publisher(SPEAKING_ATTENTION_POINT_PUBLISHER,
                                                                     TargetWithPriority, queue_size=5),
-                        "vizu": rospy.Publisher("speech_wrapper/speaking_attention_point", PointStamped, queue_size=5)}
+                        "vizu": rospy.Publisher("speech_wrapper/speaking_attention_point", PointStamped, queue_size=5),
+                        "speech": rospy.Publisher("robot_dialogue", String, queue_size=5)}
         self.log_pub = {"isSpeakingTo": rospy.Publisher("predicates_log/speakingto", String, queue_size=5),
                         "isSpeaking": rospy.Publisher("predicates_log/speaking", String, queue_size=5)}
         self.current_situations_map = {}
@@ -73,7 +73,9 @@ class SpeechWrapperNode(object):
         target_with_priority.target.header.point.z = 0.0
         target_with_priority.priority = SPEAK_ALONE_PRIORITY
         self.attention_point = target_with_priority
+        self.ros_pub["speech"].publish(req.text)
         self.tts.say(req.text)
+
         self.end_predicate(self.world.timeline, "isSpeaking", "robot")
         return True
 
@@ -84,6 +86,7 @@ class SpeechWrapperNode(object):
         self.attention_point = target_with_priority
         self.start_predicate(self.world.timeline, "isSpeaking", "robot")
         self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
+        self.ros_pub["speech"].publish(req.text)
         self.tts.say(req.text)
         self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
         self.end_predicate(self.world.timeline, "isSpeaking", "robot")
@@ -109,9 +112,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Handle speech synthesis")
     parser.add_argument("world", help="The world where to write the situation associated to speech")
+    parser.add_argument("--nao_ip", default="mummer-eth0.laas.fr", help="The robot IP")
+    parser.add_argument("--nao_port", default="9559", help="The robot port")
     args = parser.parse_args()
 
     rospy.init_node("speech_wrapper", anonymous=True)
 
     with underworlds.Context("speech_wrapper") as ctx:  # Here we connect to the server
-        SpeechWrapperNode(ctx, args.world).run()
+        SpeechWrapperNode(ctx, args.world, args.nao_ip, int(args.nao_port)).run()
