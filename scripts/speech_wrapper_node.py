@@ -23,7 +23,8 @@ class SpeechWrapperNode(object):
 
         self.tts = ALProxy("ALTextToSpeech", nao_ip, nao_port)
         self.tts.setParameter("speed", VOICE_SPEED)
-
+        self.nao_ip = nao_ip
+        self.nao_port = nao_port
         self.world = ctx.worlds[world]
 
         self.ros_services = {"speak": rospy.Service("speech_wrapper/speak", Speak, self.handle_speak),
@@ -74,8 +75,12 @@ class SpeechWrapperNode(object):
         target_with_priority.priority = SPEAK_ALONE_PRIORITY
         self.attention_point = target_with_priority
         self.ros_pub["speech"].publish(req.text)
-        self.tts.say(req.text)
-
+        try:
+            self.tts.say(req.text)
+        except Exception:
+            self.tts = ALProxy("ALTextToSpeech", self.nao_ip, self.nao_port)
+            self.tts.setParameter("speed", VOICE_SPEED)
+            self.tts.say(req.text)
         self.end_predicate(self.world.timeline, "isSpeaking", "robot")
         return True
 
@@ -87,7 +92,12 @@ class SpeechWrapperNode(object):
         self.start_predicate(self.world.timeline, "isSpeaking", "robot")
         self.start_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
         self.ros_pub["speech"].publish(req.text)
-        self.tts.say(req.text)
+        try:
+            self.tts.say(req.text)
+        except Exception:
+            self.tts = ALProxy("ALTextToSpeech", self.nao_ip, self.nao_port)
+            self.tts.setParameter("speed", VOICE_SPEED)
+            self.tts.say(req.text)
         self.end_predicate(self.world.timeline, "isSpeakingTo", "robot", object_name=req.look_at.header.frame_id)
         self.end_predicate(self.world.timeline, "isSpeaking", "robot")
         return True
