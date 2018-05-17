@@ -11,7 +11,7 @@ from naoqi import ALProxy
 from speech_wrapper.srv import Speak, SpeakTo
 from head_manager.msg import TargetWithPriority
 
-SPEAKING_ATTENTION_POINT_PUBLISHER = "/head_speaking_target"
+SPEAKING_ATTENTION_POINT_PUBLISHER = "/head_manager/head_speaking_target"
 
 SPEAK_ALONE_PRIORITY = 50
 
