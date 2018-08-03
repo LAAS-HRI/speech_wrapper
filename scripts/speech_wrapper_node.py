@@ -78,6 +78,7 @@ class SpeechWrapperNode(object):
         try:
             self.tts.say(req.text)
         except Exception:
+            time.sleep(0.2)
             self.tts = ALProxy("ALTextToSpeech", self.nao_ip, self.nao_port)
             self.tts.setParameter("speed", VOICE_SPEED)
             self.tts.say(req.text)
@@ -95,6 +96,7 @@ class SpeechWrapperNode(object):
         try:
             self.tts.say(req.text)
         except Exception:
+            time.sleep(0.2)
             self.tts = ALProxy("ALTextToSpeech", self.nao_ip, self.nao_port)
             self.tts.setParameter("speed", VOICE_SPEED)
             self.tts.say(req.text)
